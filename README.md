@@ -1,165 +1,165 @@
-# 🇮🇳 UPI Transactions Dataset — Fraud Detection & Spending Analytics
+# UPI Fraud Risk Intelligence System
 
-> A comprehensive, realistic synthetic dataset simulating India's Unified Payments Interface (UPI) ecosystem — built for machine learning, fraud detection, and financial analytics.
+An end-to-end fraud risk detection system for UPI transactions — built with a SQL data warehouse, a Python risk-scoring engine, an interactive Power BI dashboard, and an Excel cost-benefit model.
 
----
-
-## 📌 Problem Statement
-
-India's UPI network processes **billions of transactions every month**, making it one of the world's largest real-time payment systems. With scale comes risk — fraud, anomalous behavior, and identity misuse are growing challenges for fintechs, banks, and regulators alike.
-
-This dataset simulates **20,000 UPI transactions** across 2,000 users and 400 merchants, covering an entire calendar year (Jan–Dec 2024). It is structured to support:
-
-- 🔍 **Fraud Detection** — Binary classification using behavioral and risk signals
-- 📊 **Spending Behavior Analysis** — Cluster users by transaction patterns
-- 🏪 **Merchant Analytics** — Understand category-level payment trends
-- 📈 **Time-Series Modeling** — Temporal patterns in payment behavior
-- 🎯 **Credit & Risk Scoring** — Build synthetic risk profiles
+This isn't just a classification notebook. It's a small version of what a fraud ops analytics stack actually looks like: structured data storage → explainable risk scoring → an investigation-ready dashboard → a business-impact translation layer.
 
 ---
 
-## 📂 Dataset Files
+## Problem Statement
 
-| File | Rows | Columns | Description |
-|---|---|---|---|
-| `transactions.csv` | 20,000 | 30 | Core transaction log with all features |
-| `users.csv` | 2,000 | 13 | Sender profiles and behavioral attributes |
-| `merchants.csv` | 400 | 9 | Merchant/receiver metadata |
-| `fraud_labels.csv` | 20,000 | 11 | Isolated fraud signals and labels |
+India's UPI network processes billions of transactions a month. Two mistakes are costly in different ways: missing real fraud (direct financial loss) and over-flagging genuine transactions (customer friction, lost trust). This project builds a system that doesn't just label transactions as "fraud" or "not fraud" — it produces a **0–100 risk score with human-readable reasons**, so a fraud ops team can prioritize review effort instead of treating every alert equally.
 
-> **Relational Key:** `user_id` links `transactions ↔ users`. `receiver_id` links `transactions ↔ merchants` (for P2M transactions).
+## Architecture
 
----
-
-## 🔑 Key Features at a Glance
-
-### Transactions (`transactions.csv`)
 ```
-transaction_id, user_id, receiver_id, receiver_type, amount, timestamp,
-date, hour_of_day, day_of_week, is_weekend, is_night_transaction,
-time_since_last_txn_min, transaction_type, payment_app, device_type,
-status, user_city_tier, user_kyc_status, user_avg_monthly_txn,
-user_avg_txn_value, user_loyalty_score, new_device_flag,
-ip_location_mismatch, failed_attempts_last_24h, transaction_velocity,
-amount_deviation_score, is_fraud, recurring_payment_flag,
-balance_after_transaction, transaction_frequency_score
-```
-
-### Users (`users.csv`)
-```
-user_id, age_group, city, city_tier, kyc_status, account_age_days,
-linked_bank_count, avg_monthly_transactions, avg_transaction_value,
-preferred_app, preferred_device, user_loyalty_score, is_high_risk_user
+Raw UPI data (3 relational CSVs)
+        │
+        ▼
+SQL data warehouse (SQLite, star schema)
+   fact_transactions + dim_users + dim_merchants + dim_date
+        │
+        ▼
+Python risk engine
+   feature engineering → 3 models compared → best model selected
+   → probability converted to 0-100 risk score → reason codes
+        │
+        ▼
+Power BI dashboard (3 pages)
+   Executive Overview | Investigation View (drill-through) | Time & Behavior Patterns
+        │
+        ▼
+Excel cost-benefit model
+   translates catch-rate into estimated monthly savings
 ```
 
-### Merchants (`merchants.csv`)
-```
-merchant_id, merchant_name, merchant_category, merchant_size,
-city, city_tier, avg_daily_transactions, is_registered, rating
-```
+## Dataset
 
----
+[UPI Transactions 2024 Dataset](https://www.kaggle.com/) (Kaggle) — a synthetic dataset modeling India's UPI ecosystem, released under CC0.
 
-## 📊 Dataset Statistics
+- 20,000 transactions across 2,000 users and 400 merchants, full 2024 calendar year
+- 6 payment apps (GPay, PhonePe, Paytm, BHIM, Amazon Pay, WhatsApp Pay), 38 Indian cities across Tier 1/2/3
+- Fraud rate ~3.8%, fraud label generated probabilistically from 8 weighted risk signals (device, IP mismatch, failed attempts, velocity, amount deviation, KYC status, night-time flag, high-risk-user flag)
+- 100% synthetic — no real individuals, accounts, or transactions. Safe for public research and education.
 
-| Metric | Value |
+## Tech Stack
+
+| Layer | Tools |
 |---|---|
-| Total transactions | 20,000 |
-| Date range | Jan 2024 – Dec 2024 |
-| Fraud rate | ~3.8% |
-| Avg transaction amount | ₹876.85 |
-| Transaction success rate | 88.1% |
-| Payment apps covered | 6 (GPay, PhonePe, Paytm, BHIM, Amazon Pay, WhatsApp Pay) |
-| Cities covered | 38 (Tier 1, 2, and 3) |
-| Transaction types | P2P, P2M, Bill Payment, Recharge, EMI, Subscription |
+| Data warehouse | SQLite, SQL (JOINs, aggregation, star schema) |
+| Modeling | Python — pandas, NumPy, scikit-learn, XGBoost, imbalanced-learn |
+| Visualization (EDA) | Matplotlib, Seaborn |
+| Dashboard | Power BI (DAX, drill-through, star/galaxy schema) |
+| Business impact | Excel |
 
----
+## Modeling Approach
 
-## 🧠 Suggested Use Cases & Notebooks
+Three models were trained and compared — Logistic Regression, Random Forest, and XGBoost — using class-weighting to handle the ~3.8% fraud rate, with the classification threshold tuned per model via the precision-recall curve (the default 0.5 threshold performs poorly on this imbalanced data).
 
-### 1. 🔐 Fraud Detection (Classification)
-**Target:** `is_fraud`  
-**Suggested models:** XGBoost, LightGBM, Random Forest, Logistic Regression  
-**Key features:** `new_device_flag`, `ip_location_mismatch`, `failed_attempts_last_24h`, `transaction_velocity`, `amount_deviation_score`, `is_night_transaction`, `user_kyc_status`
+SMOTE oversampling was also tested, since it's a common recommendation for imbalanced classification. It made every model's ROC-AUC *worse* (0.75 → ~0.55), most likely because the dataset's probabilistic fraud-label generation introduces label noise, and SMOTE amplified that noise rather than a real signal. It was reverted in favor of class-weighting. This is reported here deliberately — not every standard technique works on every dataset, and the evaluation step is what tells you that.
 
-```python
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+**Final model: Logistic Regression** (best ROC-AUC among the three, and a natural fit since the dataset's label is itself generated from a linear weighted sum of risk signals).
 
-features = ['amount', 'hour_of_day', 'is_weekend', 'is_night_transaction',
-            'new_device_flag', 'ip_location_mismatch', 'failed_attempts_last_24h',
-            'transaction_velocity', 'amount_deviation_score', 'user_loyalty_score']
+### Holdout evaluation
 
-X = df[features].fillna(0)
-y = df['is_fraud']
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y)
-model = RandomForestClassifier(n_estimators=100, class_weight='balanced')
-model.fit(X_train, y_train)
+| Metric | Score |
+|---|---|
+| Best threshold | 0.711 |
+| Precision | 0.125 |
+| Recall | 0.327 |
+| F1-score | 0.181 |
+| ROC-AUC | 0.745 |
+
+Precision/Recall at a single threshold understate what this model is actually useful for. The metric that matters for a fraud ops team is **lift**: how much better than random review is the model, at a given review workload?
+
+### Risk-tier lift report (holdout set)
+
+| Top % reviewed | Frauds caught | Catch rate | Lift vs. random |
+|---|---|---|---|
+| 1% | 4 / 153 | 2.6% | 2.6x |
+| 3% | 17 / 153 | 11.1% | 3.7x |
+| 5% | 26 / 153 | 17.0% | 3.4x |
+| 10% | 50 / 153 | 32.7% | 3.3x |
+| 20% | 73 / 153 | 47.7% | 2.4x |
+
+**Reviewing just the top 5% highest-risk transactions catches 3.4x more fraud than random sampling.**
+
+### Explainability
+
+Each transaction gets a risk score (model probability × 100) plus up to 3 plain-language reason codes, derived from each feature's coefficient contribution (`scaled feature value × logistic regression coefficient`) — a simplified, linear-model version of SHAP-style attribution. Example:
+
+> **Risk score: 84.7** — New/unrecognized device; IP location mismatch; Amount much higher than usual for user
+
+## Power BI Dashboard
+
+**Page 1 — Executive Overview:** KPI cards (transaction volume, fraud rate, high-risk count, catch rate), fraud rate by merchant category, risk-tier split, fraud rate trend over time.
+
+**Page 2 — Investigation View:** Sortable, conditionally-formatted transaction table with risk scores and reason codes. Supports **drill-through** from the category chart on the Executive Overview page — clicking a category filters straight to its suspicious transactions.
+
+**Page 3 — Time & Behavior Patterns:** Fraud rate by hour of day and day of week, using a proper date dimension table for correct chronological sorting and time intelligence.
+
+*(Screenshots: add yours to a `screenshots/` folder and reference them here, e.g. `![Executive Overview](screenshots/executive_overview.png)`)*
+
+## Key Insights
+
+- Reviewing the top 5% of transactions by risk score catches 17% of all fraud — a 3.4x lift over random review.
+- Fuel, Insurance, and Grocery categories show the highest fraud rates, though some (like Fuel Tier-1) have small sample sizes and should be read with caution rather than as strong signals on their own.
+- Fraud rate shows mild seasonality — dipping around July (~3.5%) and peaking in November (~4.4%), plausibly tied to festive-season shopping activity.
+- The single best predictor structurally is that the dataset's fraud label is itself a linear combination of risk signals — which is why a simple, interpretable model (Logistic Regression) outperformed more complex ones here. Model choice should follow from understanding the data, not from picking the most advanced algorithm available.
+
+## Business Impact (illustrative)
+
+A simple Excel cost-benefit model translates the top-5% catch rate into estimated monthly savings, using illustrative assumptions (₹8,000 average fraud loss, ₹25 manual review cost, 50,000 monthly transactions — actual figures would vary by organization):
+
+**Estimated net monthly savings: ₹25.2 lakh**, from focusing manual review effort on the top 5% highest-risk transactions instead of reviewing randomly or not at all.
+
+## Project Structure
+
+```
+upi-fraud-risk-detection/
+├── data/                    # Raw CSVs + SQLite database
+├── notebooks/
+│   ├── 01_load_data.py
+│   ├── 02_join_query.py
+│   ├── 03_eda.py
+│   ├── 04_build_star_schema.py
+│   ├── 05_train_models.py
+│   ├── 06_generate_risk_scores.py
+│   └── plots/
+├── powerbi/
+│   └── UPI_Fraud_Risk_Dashboard.pbix
+├── excel/
+│   └── fraud_cost_benefit_calculator.xlsx
+└── README.md
 ```
 
-### 2. 👥 User Spending Segmentation (Clustering)
-**Target:** Unsupervised  
-**Suggested models:** K-Means, DBSCAN, Hierarchical Clustering  
-**Aggregate by `user_id`:** total spend, frequency, avg amount, night ratio, app preference
+## How to Run
 
-### 3. 📅 Time-Series Spending Patterns
-**Use:** `timestamp`, `hour_of_day`, `day_of_week`, `is_weekend`  
-**Explore:** peak transaction hours, weekend vs weekday volumes, monthly trends
+```bash
+pip install pandas numpy scikit-learn matplotlib seaborn xgboost imbalanced-learn
 
-### 4. 🏪 Merchant Category Analysis
-**Join:** `transactions.csv` + `merchants.csv` via `receiver_id`  
-**Explore:** category-wise revenue, fraud rates per category, city-tier spending gaps
+cd notebooks
+python 01_load_data.py
+python 04_build_star_schema.py
+python 05_train_models.py
+python 06_generate_risk_scores.py
+```
 
----
+Then open `powerbi/UPI_Fraud_Risk_Dashboard.pbix` in Power BI Desktop (Python-script data sources will need the file path in the query updated to your local path).
 
-## 🗂️ Data Dictionary
+## Future Improvements
 
-See `data_dictionary.csv` for full column-by-column descriptions, data types, and value ranges for all four files.
+- Replace coefficient-based reason codes with full SHAP values for tree-based models
+- Add a simple Flask/FastAPI endpoint to serve risk scores in near real-time
+- Expand the date range and validate against multiple years of data
+- Hyperparameter tuning via cross-validation (kept minimal here to prioritize the end-to-end pipeline)
 
----
+## Author
 
-## ⚙️ Data Generation Methodology
+**Paras Sharma**
+Data Analyst | SQL · Python · Power BI · Excel
+[LinkedIn](www.linkedin.com/in/paras-sharma-data-analyst) · [Email](paras07sharma07@gmail.com)
 
-This dataset was **fully synthetically generated** using Python (NumPy, Pandas, Faker). Key design decisions:
+## Acknowledgements
 
-- **Amount distribution:** Log-normal (realistic skew — many small, few large transactions), capped at ₹1,00,000 per NPCI norms
-- **Fraud labeling:** Probabilistic scoring model combining 8 risk signals (not random assignment). Fraud score = weighted sum of `new_device_flag + ip_mismatch + failed_attempts + velocity + amount_deviation + kyc_status + is_night + high_risk_user`
-- **City-tier realism:** Tier 1 users have higher transaction frequency and value than Tier 2/3
-- **Controlled noise:** ~2% random NaN values in `time_since_last_txn_min`, `transaction_velocity`, and `amount_deviation_score` to simulate real-world data quality
-- **Temporal realism:** Transactions distributed across full 2024 calendar year
-
----
-
-## 🔒 Privacy & Ethics
-
-- ✅ **100% synthetic data** — no real individuals, accounts, or financial records
-- ✅ No PII (no names, phone numbers, Aadhaar, or bank account numbers)
-- ✅ User and merchant IDs are anonymized codes (`USR00001`, `MRC0001`)
-- ✅ Designed following principles aligned with **NPCI data privacy guidelines**
-- ✅ Safe for public research, education, and competition use
-
----
-
-## 💡 Pro Tips for Explorers
-
-1. **Class imbalance** — Fraud rate is ~3.8%. Use `class_weight='balanced'`, SMOTE, or threshold tuning
-2. **Feature engineering** — `amount / user_avg_txn_value` ratio is a powerful derived feature
-3. **Join the tables** — Merchant category + transaction data unlocks richer fraud patterns
-4. **Temporal features** — `hour_of_day` and `is_night_transaction` are strong behavioral signals
-5. **Missing values** — Intentional NaNs in 3 columns; handle them thoughtfully (don't just drop)
-
----
-
-## 📜 License
-
-This dataset is released under **CC0: Public Domain**. You are free to use, modify, and distribute it for any purpose without restriction.
-
----
-
-## 🙏 Acknowledgements
-
-Inspired by India's real UPI ecosystem operated by the **National Payments Corporation of India (NPCI)**. All data is synthetic and does not represent any real financial institution, user, or transaction.
-
----
-
-*If you find this dataset useful, please upvote ⬆️ and share your notebooks — it helps the community!*
+Dataset inspired by India's UPI ecosystem operated by NPCI. All data used is synthetic and does not represent any real financial institution, user, or transaction.
